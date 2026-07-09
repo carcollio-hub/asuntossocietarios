@@ -13,7 +13,7 @@ import plotly.graph_objects as go
 # CONFIGURACIÓN DE PÁGINA
 # ============================================================
 st.set_page_config(
-    page_title="Panel Operativo de Gestiones | SCD",
+    page_title="Panel de Gestiones - Gerencia de Asuntos Societarios | SCD",
     page_icon="🔖",
     layout="wide",
     initial_sidebar_state="expanded",
