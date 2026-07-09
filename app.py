@@ -400,7 +400,7 @@ def _resetear_filtros():
 with st.sidebar:
     st.markdown(f"""
     <div style="background-color:{COLOR_PRIMARY}; padding:14px 16px; border-radius:10px; margin-bottom:14px;">
-        <span style="color:white; font-size:1.15rem; font-weight:700;">🔎 Filtros del dashboard</span><br>
+        <span style="color:white; font-size:1.15rem; font-weight:700;">🔎 Filtros del Panel</span><br>
         <span style="color:#DCE6F1; font-size:0.82rem;">Se aplican a todas las pestañas y gráficos.</span>
     </div>
     """, unsafe_allow_html=True)
