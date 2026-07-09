@@ -374,8 +374,8 @@ def seccion_demografia(df: pd.DataFrame, key_prefix: str):
 # ============================================================
 # ENCABEZADO
 # ============================================================
-st.title("🔖 Panel Operativo de Gestiones")
-st.caption("Boletines Autorales · Boletines Conexos · Anticipos Reajustables · Aporte Viaje · Pagos")
+st.title("🔖 Panel Operativo de Gestiones - Gerencia de Asuntos Societarios")
+st.caption("Todos los datos han sido anonimizados")
 
 DATA_PATH = "Datos_Python.xlsx"
 
