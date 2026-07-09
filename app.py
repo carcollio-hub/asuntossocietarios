@@ -13,8 +13,8 @@ import plotly.graph_objects as go
 # CONFIGURACIÓN DE PÁGINA
 # ============================================================
 st.set_page_config(
-    page_title="Dashboard SCD | Gestiones",
-    page_icon="📊",
+    page_title="Panel Operativo de Gestiones | SCD",
+    page_icon="🔖",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -183,6 +183,10 @@ def cargar_datos(file) -> dict:
 
         if "ID Python" in df.columns:
             df = df.drop(columns=["ID Python"])
+
+        columnas_unnamed = [c for c in df.columns if str(c).startswith("Unnamed")]
+        if columnas_unnamed:
+            df = df.drop(columns=columnas_unnamed)
 
         if "Mes" in df.columns:
             df["Mes"] = pd.Categorical(df["Mes"], categories=MESES_ORDEN, ordered=True)
@@ -371,7 +375,7 @@ def seccion_demografia(df: pd.DataFrame, key_prefix: str):
 # ENCABEZADO
 # ============================================================
 st.title("🔖 Panel Operativo de Gestiones")
-st.caption("Todos los datos han sido anonimizados")
+st.caption("Boletines Autorales · Boletines Conexos · Anticipos Reajustables · Aporte Viaje · Pagos")
 
 DATA_PATH = "Datos_Python.xlsx"
 
@@ -400,7 +404,7 @@ def _resetear_filtros():
 with st.sidebar:
     st.markdown(f"""
     <div style="background-color:{COLOR_PRIMARY}; padding:14px 16px; border-radius:10px; margin-bottom:14px;">
-        <span style="color:white; font-size:1.15rem; font-weight:700;">🔎 Filtros del Panel</span><br>
+        <span style="color:white; font-size:1.15rem; font-weight:700;">🔎 Filtros del dashboard</span><br>
         <span style="color:#DCE6F1; font-size:0.82rem;">Se aplican a todas las pestañas y gráficos.</span>
     </div>
     """, unsafe_allow_html=True)
@@ -455,13 +459,15 @@ with st.sidebar:
 # ============================================================
 # TABS PRINCIPALES
 # ============================================================
-tab_resumen, tab_autorales, tab_conexos, tab_anticipos, tab_viaje, tab_pagos = st.tabs([
+tab_resumen, tab_autorales, tab_conexos, tab_anticipos, tab_viaje, tab_pagos, tab_fondo, tab_convenios = st.tabs([
     "🏠 Resumen General",
     "📝 Boletines Autorales",
     "🎵 Boletines Conexos",
     "💰 Anticipos Reajustables",
     "✈️ Aporte Viaje",
     "💳 Pagos",
+    "🚨 Fondo Emergencia",
+    "🤝 Convenios",
 ])
 
 # ------------------------------------------------------------
@@ -744,3 +750,121 @@ with tab_pagos:
     st.divider()
     seccion_demografia(df, "pagos")
 
+# ------------------------------------------------------------
+# TAB: FONDO EMERGENCIA
+# ------------------------------------------------------------
+with tab_fondo:
+    df = hojas_filtradas["Fondo Emergencia"]
+
+    titulo_seccion("Indicadores clave")
+    c1, c2, c3 = st.columns(3)
+    total = len(df)
+    monto_total = df["Monto otorgado"].sum() if total else 0
+    monto_prom = df["Monto otorgado"].mean() if total else 0
+    c1.metric("Total solicitudes", f"{total:,}".replace(",", "."), delta=delta_ultimo_trimestre(df))
+    c2.metric("Monto total otorgado", formatear_moneda_compacta(monto_total),
+              help=f"Valor exacto: {formatear_moneda_exacta(monto_total)}")
+    c3.metric("Monto promedio otorgado", formatear_moneda_exacta(monto_prom))
+
+    st.divider()
+    titulo_seccion("Tipos de solicitud recibidas")
+    if not df.empty and "MOTIVO" in df.columns:
+        conteo_motivo = df["MOTIVO"].value_counts().reset_index()
+        conteo_motivo.columns = ["MOTIVO", "Cantidad"]
+        fig = px.treemap(conteo_motivo, path=["MOTIVO"], values="Cantidad",
+                         color="MOTIVO", color_discrete_sequence=PALETTE)
+        fig.update_traces(textinfo="label+value+percent root", textfont_size=16)
+        fig.update_layout(title="Distribución de solicitudes por motivo", height=420,
+                          margin=dict(t=50, l=10, r=10, b=10))
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No hay datos suficientes para este gráfico con los filtros seleccionados.")
+
+    st.divider()
+    col1, col2 = st.columns(2)
+    with col1:
+        grafico_evolucion_trimestral(df, "Evolución trimestral de solicitudes", color=COLOR_SAGE)
+    with col2:
+        if not df.empty and "Año" in df.columns and "Mes" in df.columns and "Monto otorgado" in df.columns:
+            temp = _agregar_periodo_trimestral(df)
+            monto_trim = temp.groupby(["Año", "Trimestre", "Periodo"], observed=True)["Monto otorgado"] \
+                .sum().reset_index()
+            monto_trim = monto_trim.sort_values(["Año", "Trimestre"])
+            monto_trim["Monto (MM$)"] = (monto_trim["Monto otorgado"] / 1_000_000).round(2)
+            max_val = monto_trim["Monto (MM$)"].max() if not monto_trim.empty else 0
+            fig = px.bar(monto_trim, x="Periodo", y="Monto (MM$)", template=PLOTLY_TEMPLATE,
+                         color_discrete_sequence=[COLOR_GOLD], text="Monto (MM$)")
+            fig.update_traces(textposition="outside", cliponaxis=False)
+            fig.update_layout(title="Evolución trimestral del monto otorgado", xaxis_title="Trimestre",
+                              yaxis_title="Monto (millones de $)", height=380,
+                              yaxis=dict(range=[0, max_val * 1.2]))
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hay datos suficientes para este gráfico con los filtros seleccionados.")
+
+    col3, col4 = st.columns(2)
+    with col3:
+        grafico_barras_categoria(df, "Categoría", "Solicitudes por categoría de socio")
+    with col4:
+        if not df.empty and "MOTIVO" in df.columns and "Monto otorgado" in df.columns:
+            monto_motivo = df.groupby("MOTIVO", observed=True)["Monto otorgado"].mean().reset_index()
+            monto_motivo = monto_motivo.sort_values("Monto otorgado", ascending=False)
+            monto_motivo["Etiqueta"] = monto_motivo["Monto otorgado"].apply(formatear_moneda_exacta)
+            max_val = monto_motivo["Monto otorgado"].max() if not monto_motivo.empty else 0
+            fig = px.bar(monto_motivo, x="MOTIVO", y="Monto otorgado", template=PLOTLY_TEMPLATE,
+                         color="MOTIVO", color_discrete_sequence=PALETTE, text="Etiqueta")
+            fig.update_traces(textposition="outside", cliponaxis=False, showlegend=False)
+            fig.update_layout(title="Monto promedio otorgado por motivo", height=380,
+                              yaxis_title="Monto promedio ($)", yaxis=dict(range=[0, max_val * 1.25]))
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No hay datos suficientes para este gráfico con los filtros seleccionados.")
+
+    st.divider()
+    seccion_demografia(df, "fondo")
+
+# ------------------------------------------------------------
+# TAB: CONVENIOS
+# ------------------------------------------------------------
+with tab_convenios:
+    df = hojas_filtradas["Convenios"]
+    st.caption("Los convenios corresponden a acuerdos vigentes con empresas para acceso a descuentos y "
+               "beneficios; no son solicitudes de socios, por lo que no se ven afectados por los filtros "
+               "de sexo, región, edad, año o trimestre del panel lateral.")
+
+    titulo_seccion("Indicadores clave")
+    c1, c2, c3, c4 = st.columns(4)
+    total_convenios = int(df["Cantidad"].sum()) if not df.empty else 0
+    tipos_distintos = df["Tipo"].nunique() if not df.empty else 0
+    nacional = int(df.loc[df["Presencia"] == "Nacional", "Cantidad"].sum()) if not df.empty else 0
+    metropolitana = int(df.loc[df["Presencia"] == "Metropolitana", "Cantidad"].sum()) if not df.empty else 0
+    c1.metric("Total convenios vigentes", f"{total_convenios:,}".replace(",", "."))
+    c2.metric("Tipos de convenio", f"{tipos_distintos:,}".replace(",", "."))
+    c3.metric("Alcance nacional", f"{nacional:,}".replace(",", "."))
+    c4.metric("Alcance Región Metropolitana", f"{metropolitana:,}".replace(",", "."))
+
+    st.divider()
+    titulo_seccion("Tipos de convenio y alcance geográfico")
+    if not df.empty:
+        fig = px.treemap(df, path=["Presencia", "Tipo"], values="Cantidad",
+                         color="Tipo", color_discrete_sequence=PALETTE)
+        fig.update_traces(textinfo="label+value", textfont_size=15)
+        fig.update_layout(title="Convenios por tipo y alcance geográfico", height=460,
+                          margin=dict(t=50, l=10, r=10, b=10))
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No hay datos disponibles.")
+
+    st.divider()
+    if not df.empty:
+        orden = df.sort_values("Cantidad", ascending=True)
+        max_val = orden["Cantidad"].max()
+        fig = px.bar(orden, x="Cantidad", y="Tipo", orientation="h", template=PLOTLY_TEMPLATE,
+                     color="Tipo", color_discrete_sequence=PALETTE, text="Cantidad")
+        fig.update_traces(textposition="outside", showlegend=False, cliponaxis=False)
+        fig.update_layout(title="Cantidad de convenios por tipo", height=420,
+                          yaxis={"categoryorder": "total ascending"},
+                          xaxis=dict(range=[0, max_val * 1.25]))
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No hay datos disponibles.")
